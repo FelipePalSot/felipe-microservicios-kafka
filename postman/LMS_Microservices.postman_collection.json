@@ -1,0 +1,389 @@
+{
+  "info": {
+    "_postman_id": "lms-microservices-2026",
+    "name": "LMS Microservices - Flujo End-to-End",
+    "description": "Flujo completo: User → Course → Publish → Enrollment → Payment → Confirmation\n\nPuertos:\n- user-service: 8081\n- course-service: 8083\n- enrollment-service: 8084\n- payment-service: 8085\n- notification-service: 8086",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "user_id",
+      "value": "1"
+    },
+    {
+      "key": "course_id",
+      "value": "1"
+    },
+    {
+      "key": "enrollment_id",
+      "value": "1"
+    },
+    {
+      "key": "payment_id",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - HEALTH CHECKS",
+      "item": [
+        {
+          "name": "User Service Health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8081/api/users/health"
+            }
+          }
+        },
+        {
+          "name": "Course Service Health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8083/courses/health"
+            }
+          }
+        },
+        {
+          "name": "Enrollment Service Health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8084/enrollments/health"
+            }
+          }
+        },
+        {
+          "name": "Payment Service Health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8085/payments/health"
+            }
+          }
+        },
+        {
+          "name": "Notification Service Health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8086/notifications/health"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - USER SERVICE",
+      "item": [
+        {
+          "name": "Crear Usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('user_id', json.id);",
+                  "console.log('User created with id: ' + json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8081/api/users"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Juan Perez\",\n  \"email\": \"juan.perez@lms.com\",\n  \"phone\": \"+51-999-111-222\",\n  \"address\": \"Lima, Peru\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Obtener Usuario por ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8081/api/users/{{user_id}}"
+            }
+          }
+        },
+        {
+          "name": "Listar todos los Usuarios",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8081/api/users"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - COURSE SERVICE",
+      "item": [
+        {
+          "name": "Crear Curso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('course_id', json.id);",
+                  "console.log('Course created with id: ' + json.id);",
+                  "// Ver en consola de course-service: [COURSE-SERVICE] Course created",
+                  "// Ver en consola de notification-service: [NOTIFICATION-SERVICE] CourseCreatedEvent received"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8083/courses"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Spring Boot Microservices\",\n  \"description\": \"Aprende a construir microservicios con Spring Boot, RestTemplate y Kafka\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Listar todos los Cursos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8083/courses"
+            }
+          }
+        },
+        {
+          "name": "Obtener Curso por ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8083/courses/{{course_id}}"
+            }
+          }
+        },
+        {
+          "name": "PUBLICAR Curso (POST /courses/{id}/publish)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "console.log('Course published: ' + JSON.stringify(json));",
+                  "// LOGS ESPERADOS:",
+                  "// course-service: [COURSE-SERVICE] Course PUBLISHED: id=1, title=...",
+                  "// course-service: [KAFKA PRODUCER] Sent COURSE_PUBLISHED to topic=lms.course.events",
+                  "// notification-service: [KAFKA CONSUMER - NOTIFICATION] Received course event",
+                  "// notification-service: [NOTIFICATION-SERVICE] CoursePublishedEvent received",
+                  "// notification-service: [NOTIFICATION-SERVICE] Notification SAVED"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "http://localhost:8083/courses/{{course_id}}/publish"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - ENROLLMENT SERVICE (Caso 2)",
+      "item": [
+        {
+          "name": "Crear Matricula (valida User+Course via REST, publica Kafka)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('enrollment_id', json.id);",
+                  "console.log('Enrollment created: id=' + json.id + ', status=' + json.status);",
+                  "// LOGS ESPERADOS:",
+                  "// enrollment-service: [ENROLLMENT-SERVICE] RestTemplate -> GET http://localhost:8081/api/users/1",
+                  "// enrollment-service: [ENROLLMENT-SERVICE] User validated OK: id=1, name=Juan Perez",
+                  "// enrollment-service: [ENROLLMENT-SERVICE] RestTemplate -> GET http://localhost:8083/courses/1",
+                  "// enrollment-service: [ENROLLMENT-SERVICE] Course validated OK: id=1, title=...",
+                  "// enrollment-service: [ENROLLMENT-SERVICE] Enrollment CREATED: id=1, status=PENDING_PAYMENT",
+                  "// enrollment-service: [KAFKA PRODUCER] Sent ENROLLMENT_CREATED | enrollmentId=1"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8084/enrollments"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"courseId\": \"{{course_id}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Consultar Matricula por ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8084/enrollments/{{enrollment_id}}"
+            }
+          }
+        },
+        {
+          "name": "Consultar Matriculas por UserId",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8084/enrollments?userId={{user_id}}",
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - PAYMENT SERVICE (Caso 3 - APPROVED)",
+      "item": [
+        {
+          "name": "Registrar Pago APROVADO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('payment_id', json.id);",
+                  "console.log('Payment created: id=' + json.id + ', status=' + json.status);",
+                  "// LOGS ESPERADOS:",
+                  "// payment-service: [PAYMENT-SERVICE] Payment SAVED: id=1, status=APPROVED",
+                  "// payment-service: [KAFKA PRODUCER] Sent PAYMENT_APPROVED | paymentId=1, enrollmentId=1",
+                  "// enrollment-service: [KAFKA CONSUMER] Received payment event: PAYMENT_APPROVED",
+                  "// enrollment-service: [ENROLLMENT-SERVICE] PAYMENT_APPROVED -> enrollmentId=1 -> CONFIRMED",
+                  "// enrollment-service: [ENROLLMENT-SERVICE] Enrollment updated: id=1, status=CONFIRMED",
+                  "// enrollment-service: [KAFKA PRODUCER] Sent ENROLLMENT_UPDATED | enrollmentId=1, status=CONFIRMED"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8085/payments"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enrollmentId\": \"{{enrollment_id}}\",\n  \"amount\": 299.99,\n  \"status\": \"APPROVED\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Registrar Pago RECHAZADO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8085/payments"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enrollmentId\": \"{{enrollment_id}}\",\n  \"amount\": 299.99,\n  \"status\": \"REJECTED\",\n  \"rejectionReason\": \"Fondos insuficientes\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Consultar Pago por ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8085/payments/{{payment_id}}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - VERIFICAR RESULTADO FINAL",
+      "item": [
+        {
+          "name": "Verificar Matricula CONFIRMADA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "console.log('Final enrollment status: ' + json.status);",
+                  "pm.test('Enrollment debe estar CONFIRMED', function() {",
+                  "    pm.expect(json.status).to.equal('CONFIRMED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8084/enrollments/{{enrollment_id}}"
+            }
+          }
+        },
+        {
+          "name": "Ver Notificaciones del Sistema (course events)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8086/notifications"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
